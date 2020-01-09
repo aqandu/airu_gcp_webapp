@@ -1,0 +1,10 @@
+runtime: python37
+instance_class: F1
+
+
+handlers:
+- url: /static  
+  static_dir: airu_flask/static
+- url: /.*
+  script: auto
+  

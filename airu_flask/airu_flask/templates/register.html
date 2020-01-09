@@ -1,0 +1,149 @@
+{% extends "index.html" %}
+{% block content %}
+
+<div>
+    <h2>To request a sensor - fill out and submit the following information.</h2>
+</div>
+<div class="content-section">
+    <form method="POST" action="">
+        {{ form.hidden_tag() }}
+        <fieldset class=" fieldset border">
+            <legend class="border">Register and Request a Sensor</legend>
+            <div class="form-group">
+                {{ form.first_name.label(class="form-control-label") }}
+
+                {% if form.first_name.errors %}
+                {{ form.first_name(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.first_name.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.first_name(class="form-control") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.last_name.label(class="form-control-label") }}
+
+                {% if form.last_name.errors %}
+                {{ form.last_name(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.last_name.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.last_name(class="form-control") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.street_address.label(class="form-control-label") }}
+
+                {% if form.street_address.errors %}
+                {{ form.street_address(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.street_address.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.street_address(class="form-control") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.city.label(class="form-control-label") }}
+
+                {% if form.city.errors %}
+                {{ form.city(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.city.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.city(class="form-control") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.state.label(class="form-control-label") }}
+
+                {% if form.state.errors %}
+                {{ form.state(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.state.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.state(class="form-control") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.zip_code.label(class="form-control-label") }}
+
+                {% if form.zip_code.errors %}
+                {{ form.zip_code(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.zip_code.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.zip_code(class="form-control") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.email.label(class="form-control-label") }}
+                {% if form.email.errors %}
+                {{ form.email(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.email.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.email(class="form-control") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.password.label(class="form-control-label") }}
+                {% if form.password.errors %}
+                {{ form.password(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.password.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.password(class="form-control") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.confirm_password.label(class="form-control-label") }}
+                {% if form.confirm_password.errors %}
+                {{ form.confirm_password(class="form-control is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.confirm_password.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.confirm_password(class="form-control") }}
+                {% endif %}
+            </div>
+            <p class="invalid-feedback">CONSENT TO SHARE DATA: De-identified data from this study (your sensor) may be shared with the research community at large to advance science and health.
+                We will remove or code any personal information that could identify you before files are shared with other researchers to ensure that, by current scientific standards and known methods, no one will be able to identify you from the information we share.
+                Despite these measures, we cannot guarantee anonymity of your personal data.</p>
+        </fieldset>
+        <div class="form-group">
+            {{ form.submit(class="form-button") }}
+        </div>
+    </form>
+</div>
+<div>
+    <small class="small-text">
+        Already Have An Account? <a class="small-text" href="{{ url_for('login') }}">Login</a>
+    </small>
+</div>
+{% endblock content %}

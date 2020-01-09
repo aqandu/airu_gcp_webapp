@@ -1,0 +1,58 @@
+{% extends "index.html" %}
+{% block content %}
+
+<div>
+    <h2>Login to airU to view detailed sensor information.</h2>
+</div>
+
+<div class="content-section">
+    <form method="POST" action="">
+        {{ form.hidden_tag() }}
+        <fieldset class="fieldset border">
+            <legend class="legend">Login</legend>
+            <div class="form-group">
+                {{ form.email.label(class="form-control-label") }}
+                {% if form.email.errors %}
+                {{ form.email(class="form-control form-control-md is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.email.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.email(class="form-control form-control-md") }}
+                {% endif %}
+            </div>
+            <div class="form-group">
+                {{ form.password.label(class="form-control-label") }}
+                {% if form.password.errors %}
+                {{ form.password(class="form-control form-control-md is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.password.errors %}
+                    <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                {{ form.password(class="form-control form-control-md") }}
+                {% endif %}
+            </div>
+            <div class="form-check">
+                {{ form.remember(class="form-check-input") }}
+                {{ form.remember.label(class="form-check-label") }}
+            </div>
+        </fieldset>
+        <div class="form-group">
+            {{ form.submit(class="form-button") }}
+        </div>
+        <small class="small-text">
+            <a href="{{ url_for('forgot') }}">Forgot Password?</a>
+        </small>
+    </form>
+</div>
+<div class="border-top pt-3">
+    <small class="small-text">
+        Don't Have an Account? <a class="small-text" href="{{ url_for('register') }}">Register and Request a Sensor Here</a>
+    </small>
+</div>
+
+{% endblock content %}

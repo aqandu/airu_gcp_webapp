@@ -1,0 +1,97 @@
+{% extends "index.html" %}
+{% block content %}
+
+<div class="version_box">
+    <input type="checkbox" id="v1" name="version" checked="checked" value="v1">v1<br>
+    <input type="checkbox" id="v2" name="version" checked="checked" value="v2">v2<br>
+    <input type="checkbox" id="v3" name="version" value="v3">v3<br>
+</div>
+
+<div id="current_conditions" class="popup">
+    <h3>Latest Conditions</h3>
+    <h3> <span id="txtTime" class="sensor-text"></span></h3>
+    <p>Sensor: <span id="txtDevId" class="sensor-text"></span></p>
+    <p>PM<sub>1</sub>: <span id="txtPM1" class="sensor-text"></span></p>
+    <p>PM<sub>2.5</sub>: <span id="txtPM25" class="sensor-text"></span></p>
+    <p>PM<sub>10</sub>: <span id="txtPM10" class="sensor-text"></span></p>
+    <p>Temperature: <span id="txtTemp" class="sensor-text"></span></p>
+    <p>Humidity: <span id="txtHum" class="sensor-text"></span></p>
+    <p>CO: <span id="txtCO" class="sensor-text"></span></p>
+    <p>NOX: <span id="txtNOX" class="sensor-text"></span></p>
+</div>
+
+<div id="scale">
+    <div id="scale_header">PM<sub>2.5</sub> (&mu;g/m<sup>3</sup>) color scale</div>
+    <div class="color12">
+        <span class="tick_mark top_mark">-350</span>
+        <span class="tick_mark">-250</span>
+    </div>
+    <div class="color11">
+        <span class="tick_mark">-150</span>
+    </div>
+    <div class="color10">
+        <span class="tick_mark">-55</span>
+    </div>
+    <div class="color9">
+        <span class="tick_mark">-49</span>
+    </div>
+    <div class="color8">
+        <span class="tick_mark">-42</span>
+    </div>
+    <div class="color7">
+        <span class="tick_mark">-35</span>
+    </div>
+    <div class="color6">
+        <span class="tick_mark">-28</span>
+    </div>
+    <div class="color5">
+        <span class="tick_mark">-20</span>
+    </div>
+    <div class="color4">
+        <span class="tick_mark">-12</span>
+    </div>
+    <div class="color3">
+        <span class="tick_mark">-8</span>
+    </div>
+    <div class="color2">
+        <span class="tick_mark">-4</span>
+    </div>
+    <div class="color1">
+        <span class="tick_mark">-0</span>
+    </div>
+
+
+</div>
+
+<div id="map" class="full_view_map border">
+
+</div>
+
+
+<div id="historical_data" class="full_view">
+    <h2>Historical Data (Requires Login)
+        <div id="radial_group" class="radio-toolbar">
+            <input type="radio" id="1day" name="time" checked>
+            <label for="1day">1 Day</label>
+
+            <input type="radio" id="3day" name="time">
+            <label for="3day">3 Days</label>
+
+            <input type="radio" id="7day" name="time">
+            <label for="7day">7 Days</label>
+        </div>
+    </h2>
+    <svg id="svg_historical" style="width:97%; height:80%"></svg>
+
+</div>
+
+
+
+<!-- JS Script(s)-->
+<!-- MY JS Script(s)-->
+<script type="text/javascript" src="{{url_for('static', filename='js/script.js')}}"></script>
+<script src="https://maps.googleapis.com/maps/api/js?libraries=visualization,drawing&callback=initMap&key=AIzaSyDd4ghbevyLbZ3z1HAmiqUl003GeBisrXs" async defer></script>
+<script src='https://apis.google.com/js/client.js'></script>
+
+
+{% endblock content%}
