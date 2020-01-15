@@ -147,6 +147,29 @@ def validate_user(d):
         return "false"
 
 
+def my_converter(o):
+    return o.__str__()
+
+
+# Helper Functions ***************************************************************
+def send_registration_email(form, email_link):
+    try:
+        msg = Message('airU Registration', sender=os.getenv("MAIL_USERNAME"), recipients=[form.email.data, os.getenv("MAIL_USERNAME")])
+        msg.body = 'Test'
+        msg.html = render_template("registration_email.html",
+                               email=form.email.data,
+                               first_name=form.first_name.data,
+                               last_name=form.last_name.data,
+                               street_address=form.street_address.data,
+                               city_address=form.city.data,
+                               state_address=form.state.data,
+                               zip_address=form.zip_code.data,
+                               email_link=email_link)
+        mail.send(msg)
+        return "sent"
+
+    except Exception as e:
+        return str(e)
 
 # ***********************************************************
 # Function: request_data_flask(d)
@@ -213,6 +236,11 @@ def request_historical(d):
     return json_sensors
 
 
+# ****************************************************************************************************************
+# WEB API FOLLOWS-------------------------------------------------------------------------------------------------
+# ****************************************************************************************************************
+
+
 # ***********************************************************
 # Function: request_sensor_data
 # Called by script.js
@@ -223,7 +251,14 @@ def request_historical(d):
 def request_sensor_data():
     query_parameters = request.args
     device_id = query_parameters.get('device_id')
-    device_id = 'M' + device_id.upper()
+    if device_id == "all":
+        device_id = ""
+    elif device_id.find(',') > 0:
+        # multiple device_id's exist - must parse
+        device_id = "DEVICE_ID IN (" + parse_device_list(device_id) + ") AND "
+    else:
+        device_id = "DEVICE_ID =\'M" + device_id.upper() + "\' AND "
+
     days = int(query_parameters.get('days'))
     # Ensure valid number for query (no 0 or negatives)
     if days < 1:
@@ -231,42 +266,32 @@ def request_sensor_data():
 
     sensor_list = []
     # get the latest sensor data from each sensor
-    q = ("SELECT DATETIME_TRUNC(DATETIME(TIMESTAMP, 'America/Denver'), HOUR) AS D, ROUND(AVG(PM25),2) AS AVG_PM25 "
+    q = ("SELECT DEVICE_ID, DATETIME_TRUNC(DATETIME(TIMESTAMP, 'America/Denver'), HOUR) AS D, ROUND(AVG(PM25),2) AS AVG_PM25 "
         "FROM `" + sensor_table + "` "
-        "WHERE DEVICE_ID=\'" + device_id + "\' "
-        "AND TIMESTAMP >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL " + str(days) + " DAY) "
-        "GROUP BY D ORDER BY D;")
+        "WHERE " + device_id + ""
+        "TIMESTAMP >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL " + str(days) + " DAY) "
+        "GROUP BY DEVICE_ID,D ORDER BY D;")
 
     query_job = bq_client.query(q)
+    if query_job.error_result:
+        return "Invalid API call - check documentation."
     rows = query_job.result()  # Waits for query to finish
+
     for row in rows:
-        sensor_list.append({"D_TIME": row.D,
-                            "AVG_PM25": row.AVG_PM25})
+        sensor_list.append({"device_id": row.DEVICE_ID,
+                            "date_time": row.D,
+                            "avg_pm25": row.AVG_PM25})
 
     json_sensors = json.dumps(sensor_list, default=my_converter, indent=4)
     return jsonify(sensor_list)
 
 
-def my_converter(o):
-    return o.__str__()
-
-
-# Helper Functions ***************************************************************
-def send_registration_email(form, email_link):
-    try:
-        msg = Message('airU Registration', sender=os.getenv("MAIL_USERNAME"), recipients=[form.email.data, os.getenv("MAIL_USERNAME")])
-        msg.body = 'Test'
-        msg.html = render_template("registration_email.html",
-                               email=form.email.data,
-                               first_name=form.first_name.data,
-                               last_name=form.last_name.data,
-                               street_address=form.street_address.data,
-                               city_address=form.city.data,
-                               state_address=form.state.data,
-                               zip_address=form.zip_code.data,
-                               email_link=email_link)
-        mail.send(msg)
-        return "sent"
-
-    except Exception as e:
-        return str(e)
+def parse_device_list(device_list):
+    # add 'M' to all MAC addresses
+    new_string = ""
+    device_list_string = device_list.split(',')
+    for i in range(len(device_list_string)):
+        new_string += "\'M" + device_list_string[i].upper().strip() + "\',"
+    # remove last ',' in string - it will be the last character
+    new_string = new_string[:len(new_string)-1]
+    return new_string
