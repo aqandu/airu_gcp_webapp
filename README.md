@@ -1,4 +1,4 @@
-![AirU Logo](C:\Users\scott\Documents\GitHub\airu_gcp_webapp\airu_flask\airu_flask\static\data\aqLogo.png)
+![AirU Logo](airu_flask\airu_flask\static\data\aqLogo.png)
 
  # airu_gcp_webapp
 
