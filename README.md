@@ -1,12 +1,10 @@
 ![AirU Logo](/airu_flask/airu_flask/static/data/aqLogo.png)
 
- # airu_gcp_webapp
+## AirU Google Cloud Project including API for BigQuery sensor data
 
-AirU GCP project including API for Big Query
+##### URL: [scottgale.appspot.com](scottgale.appspot.com)
 
-##### URL: scottgale.appspot.com
-
-API Endpoints
+#### API Endpoints
 
 #### Endpoint: /request_sensor_data
 
