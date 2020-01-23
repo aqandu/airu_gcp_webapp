@@ -6,7 +6,7 @@
 
 #### API Endpoints
 
-#### Endpoint: /request_sensor_data
+#### Endpoint: /request_sensor_data (GET)
 
 **<u>Description:</u>** Retrieves PM 2.5 sensor data for the specified device for a given number of days in the past referenced from the current day. If days=3, the query will return all the data in the last 3 days. This endpoint provides the flexibility to request data for one sensor, multiple sensors, or all sensors. Data is returned in JSON format. 
 
@@ -30,9 +30,9 @@ Example 3: /request_sensor_data?device_id=all&days=3
 
 
 
-#### Endpoint: /request_model_data
+#### Endpoint: /request_model_data (GET)
 
-**<u>Description:</u>** Retrieves all sensor data within a given radius of a specified center point and within a given date range. If the date range and / or the radius is large expect this query to take some time. Data is returned in JSON format. 
+**<u>Description:</u>** Retrieves all sensor data within a given radius of a specified center point and within a given date range. If the date range and / or the radius is large expect this query to take some time. Data is returned in JSON format. 
 
 **<u>Query parameters:</u>**
 
