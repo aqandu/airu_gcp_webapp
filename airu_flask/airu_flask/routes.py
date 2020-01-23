@@ -243,7 +243,7 @@ def request_historical(d):
 
 # ***********************************************************
 # Function: request_sensor_data
-# Called by script.js
+# Usage: Return PM2.5 data for one or many sensor for the specified number of days
 # Query Parameters: device_id, days
 # Return: JSON object ALL entries for the specified device in the past number of days
 # ***********************************************************
@@ -281,9 +281,62 @@ def request_sensor_data():
         sensor_list.append({"device_id": row.DEVICE_ID,
                             "date_time": row.D,
                             "avg_pm25": row.AVG_PM25})
-
-    json_sensors = json.dumps(sensor_list, default=my_converter, indent=4)
     return jsonify(sensor_list)
+
+
+# ***********************************************************
+# Function: request_model_data
+# Usage: Return all sensor data within a specified radius and date range
+# Query Parameters: center_point, radius, start_date, end_date
+# Return: JSON object ALL entries for the specified device in the past number of days
+# ***********************************************************
+@app.route("/request_model_data/", methods=['GET'])
+def request_model_data():
+    query_parameters = request.args
+    lat = query_parameters.get('lat')
+    lon = query_parameters.get('lon')
+    radius = query_parameters.get('radius')
+    start_date = query_parameters.get('start_date').replace('/', ' ') + ' America/Denver'
+    end_date = query_parameters.get('end_date').replace('/', ' ') + ' America/Denver'
+
+    # TODO valudate lat/lon format
+    # TODO validate date format
+    # TODO validate # num days (set min/max limit)
+
+
+    model_data = []
+    # get the latest sensor data from each sensor
+    q = ("SELECT * "
+        "FROM `scottgale.airu_dataset_iot.airU_sensor` " 
+        "WHERE acos(sin(LAT * 0.0175) * sin(40.6789 * 0.0175) + cos(LAT * 0.0175) * cos(" + str(lat) + " * 0.0175) "
+         "* cos((" + str(lon) + " * 0.0175) - (LON * 0.0175))) * 3959 <= " + str(radius) + " "
+        "AND TIMESTAMP IN ("
+        "SELECT TIMESTAMP "
+        "FROM `scottgale.airu_dataset_iot.airU_sensor` "
+        "WHERE TIMESTAMP > '" + start_date + "' AND TIMESTAMP < '" + end_date + "' )"
+        "ORDER BY TIMESTAMP ASC;")
+
+    query_job = bq_client.query(q)
+    if query_job.error_result:
+        return "Invalid API call - check documentation."
+    rows = query_job.result()  # Waits for query to finish
+
+    for row in rows:
+        model_data.append({"device_id": row.DEVICE_ID,
+                           "date_time": row.TIMESTAMP,
+                           "pm1": row.PM1,
+                           "pm25": row.PM25,
+                           "pm10": row.PM10,
+                           "hum": row.HUM,
+                           "temp": row.TEMP,
+                           "lat": row.LAT,
+                           "lon": row.LON,
+                           "alt": row.ALT,
+                           "co": row.CO,
+                           "nox": row.NOX,
+                           "ver": row.VER})
+
+    return jsonify(model_data)
 
 
 def parse_device_list(device_list):
