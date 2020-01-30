@@ -7,6 +7,9 @@ from airu_flask import app, bq_client, firestore_client, firestore_auth, pyrebas
 from airu_flask.models import User
 from flask_login import login_user, current_user, logout_user
 import json
+from datetime import datetime
+import pytz
+from tzlocal import get_localzone
 
 load_dotenv()
 
@@ -284,25 +287,16 @@ def request_sensor_data():
     return jsonify(sensor_list)
 
 
-# ***********************************************************
-# Function: request_model_data
-# Usage: Return all sensor data within a specified radius and date range
-# Query Parameters: center_point, radius, start_date, end_date
-# Return: JSON object ALL entries for the specified device in the past number of days
-# ***********************************************************
-@app.route("/request_model_data/", methods=['GET'])
-def request_model_data():
-    query_parameters = request.args
-    lat = query_parameters.get('lat')
-    lon = query_parameters.get('lon')
-    radius = query_parameters.get('radius')
-    start_date = query_parameters.get('start_date').replace('/', ' ') + ' America/Denver'
-    end_date = query_parameters.get('end_date').replace('/', ' ') + ' America/Denver'
-
-    # TODO valudate lat/lon format
-    # TODO validate date format
-    # TODO validate # num days (set min/max limit)
-
+def request_model_data_local(lat, lon, radius, start_date, end_date):
+    print('RUNNING request_model_data_local')
+    query_start_date = str(start_date) + ' America/Denver'
+    query_end_date = str(end_date) + ' America/Denver'
+    print('lat=', lat)
+    print('lon=', lon)
+    print('start_date=', query_start_date)
+    print('end_date=', query_end_date)
+    print('radius=', radius)
+    
 
     model_data = []
     # get the latest sensor data from each sensor
@@ -313,7 +307,7 @@ def request_model_data():
         "AND TIMESTAMP IN ("
         "SELECT TIMESTAMP "
         "FROM `scottgale.airu_dataset_iot.airU_sensor` "
-        "WHERE TIMESTAMP > '" + start_date + "' AND TIMESTAMP < '" + end_date + "' )"
+        "WHERE TIMESTAMP > '" + query_start_date + "' AND TIMESTAMP < '" + query_end_date + "' )"
         "ORDER BY TIMESTAMP ASC;")
 
     query_job = bq_client.query(q)
@@ -337,6 +331,127 @@ def request_model_data():
                            "ver": row.VER})
 
     return jsonify(model_data)
+
+
+# ***********************************************************
+# Function: request_model_data
+# Usage: Return all sensor data within a specified radius and date range
+# Query Parameters: center_point, radius, start_date, end_date
+# Return: JSON object ALL entries for the specified device in the past number of days
+# ***********************************************************
+@app.route("/request_model_data/", methods=['GET'])
+def request_model_data():
+    query_parameters = request.args
+    lat = query_parameters.get('lat')
+    lon = query_parameters.get('lon')
+    radius = query_parameters.get('radius')
+    start_date = query_parameters.get('start_date').replace('/', ' ')
+    end_date = query_parameters.get('end_date').replace('/', ' ')
+
+    return request_model_data_local(lat, lon, radius, start_date, end_date)
+    
+    # print('RUNNING request_model_data')
+    # print('lat=', lat)
+    # print('lon=', lon)
+    # print('start_date=', start_date)
+    # print('end_date=', end_date)
+    # print('radius=', radius)
+
+    # # TODO valudate lat/lon format
+    # # TODO validate date format
+    # # TODO validate # num days (set min/max limit)
+
+
+    # model_data = []
+    # # get the latest sensor data from each sensor
+    # q = ("SELECT * "
+    #     "FROM `scottgale.airu_dataset_iot.airU_sensor` " 
+    #     "WHERE acos(sin(LAT * 0.0175) * sin(40.6789 * 0.0175) + cos(LAT * 0.0175) * cos(" + str(lat) + " * 0.0175) "
+    #      "* cos((" + str(lon) + " * 0.0175) - (LON * 0.0175))) * 3959 <= " + str(radius) + " "
+    #     "AND TIMESTAMP IN ("
+    #     "SELECT TIMESTAMP "
+    #     "FROM `scottgale.airu_dataset_iot.airU_sensor` "
+    #     "WHERE TIMESTAMP > '" + start_date + "' AND TIMESTAMP < '" + end_date + "' )"
+    #     "ORDER BY TIMESTAMP ASC;")
+
+    # query_job = bq_client.query(q)
+    # if query_job.error_result:
+    #     return "Invalid API call - check documentation."
+    # rows = query_job.result()  # Waits for query to finish
+
+    # for row in rows:
+    #     model_data.append({"device_id": row.DEVICE_ID,
+    #                        "date_time": row.TIMESTAMP,
+    #                        "pm1": row.PM1,
+    #                        "pm25": row.PM25,
+    #                        "pm10": row.PM10,
+    #                        "hum": row.HUM,
+    #                        "temp": row.TEMP,
+    #                        "lat": row.LAT,
+    #                        "lon": row.LON,
+    #                        "alt": row.ALT,
+    #                        "co": row.CO,
+    #                        "nox": row.NOX,
+    #                        "ver": row.VER})
+
+    # return jsonify(model_data)
+
+
+def applyCorrectionFactor(factors, data_timestamp, data):
+    for factor in factors:
+        factor_start = factor['start_date']
+        factor_end = factor['end_date']
+        if factor_start <= data_timestamp and factor_end > data_timestamp:
+            print('\nUSING FACTOR: ', factor, '\n')
+            return data*factor['sensor_1003_slope'] + factor['sensor_1003_intercept']
+    print('\nNo correction factor found for ', data_timestamp, '\n')
+    return data
+
+
+@app.route("/oleks_request/", methods=['GET'])
+def oleks_request ():
+    query_parameters = request.args
+    lat = query_parameters.get('lat')
+    lon = query_parameters.get('lon')
+    start_date = query_parameters.get('start_date')
+    end_date = query_parameters.get('end_date')
+    frequency = query_parameters.get('frequency') # in minutes
+
+    # artificially set time zone to UTC 0 so that
+    start_datetime = datetime.strptime(start_date, '%Y-%m-%d/%H:%M:%S%z')
+    end_datetime   = datetime.strptime(end_date, '%Y-%m-%d/%H:%M:%S%z')
+    # start_datetime = datetime.strptime(start_date, '%Y-%m-%d/%H:%M:%S')
+    # end_datetime   = datetime.strptime(end_date, '%Y-%m-%d/%H:%M:%S')
+
+    print('lat=', lat)
+    print('lon=', lon)
+    print('start_date=', start_datetime)
+    print('end_date=', end_datetime)
+    print('frequency=', frequency)
+
+    # step 1, load up correction factors
+    corrections_ref = firestore_client.collection('correction_factors')
+    asdf = corrections_ref.stream()
+    correction_factors = []
+    for doc in asdf:
+        correction_factors.append(doc.to_dict())
+
+    print(correction_factors)
+    applyCorrectionFactor(correction_factors, end_datetime, 10)
+
+    # step 2, query relevent data
+
+    start_date_MT = start_datetime.astimezone(pytz.timezone('US/Mountain'))
+    end_date_MT = end_datetime.astimezone(pytz.timezone('US/Mountain'))
+    start_date_MT_str = start_date_MT.strftime("%Y-%m-%d %H:%M:%S")
+    end_date_MT_str = end_date_MT.strftime("%Y-%m-%d %H:%M:%S")
+    print(start_date_MT.strftime("%Y-%m-%d %H:%M:%S"))
+    print(end_date_MT.strftime("%Y-%m-%d %H:%M:%S"))
+
+    return request_model_data_local(lat, lon, 10, start_date_MT_str, end_date_MT_str)
+    
+    return redirect(url_for('home'))
+
 
 
 def parse_device_list(device_list):

@@ -48,11 +48,11 @@ Example 3: /request_sensor_data?device_id=all&days=3
 
 **start_date**: required. The start date range of the query.
 
-​	*Format*: YYYY-MM-DD/HH:MM:SS (Example: 2020-01-15/07:30:00)
+​	*Format*: YYYY-MM-DD/HH:MM:SS+TTTT (Example: 2019-03-15/07:30:00-0700)
 
 **end_date**: required. The end date for the query
 
-​	*Format*: YYYY-MM-DD/HH:MM:SS (Example: 2020-01-15/15:30:00)
+​	*Format*: YYYY-MM-DD/HH:MM:SS+TTTT (Example: 2019-05-30/10:30:00-0600)
 
 **<u>Examples:</u>**
 
