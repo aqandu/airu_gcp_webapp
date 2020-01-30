@@ -330,7 +330,7 @@ def request_model_data_local(lat, lon, radius, start_date, end_date):
                            "nox": row.NOX,
                            "ver": row.VER})
 
-    return jsonify(model_data)
+    return model_data
 
 
 # ***********************************************************
@@ -348,7 +348,7 @@ def request_model_data():
     start_date = query_parameters.get('start_date').replace('/', ' ')
     end_date = query_parameters.get('end_date').replace('/', ' ')
 
-    return request_model_data_local(lat, lon, radius, start_date, end_date)
+    return jsonify(request_model_data_local(lat, lon, radius, start_date, end_date))
     
     # print('RUNNING request_model_data')
     # print('lat=', lat)
@@ -448,9 +448,31 @@ def oleks_request ():
     print(start_date_MT.strftime("%Y-%m-%d %H:%M:%S"))
     print(end_date_MT.strftime("%Y-%m-%d %H:%M:%S"))
 
-    return request_model_data_local(lat, lon, 10, start_date_MT_str, end_date_MT_str)
+    data = request_model_data_local(lat, lon, 1, start_date_MT_str, end_date_MT_str)
+
+    # TODO apply correction factors to the data!
+
+
+    print(f'Got {len(data)} data points')
+    time_dict = {}
+    sensor_dict = {}
+    for point in data:
+        time_dict[point['date_time']] = 1 + (time_dict[point['date_time']] if point['date_time'] in time_dict else 0)
+        sensor_dict[point['device_id']] = 1 + (sensor_dict[point['device_id']] if point['device_id'] in sensor_dict else 0)
+
+    compute_url = 'localhost:5001/compute'
+    params = {'lat':lat, 'lon':lon, 'start_date':start_datetime, 'end_date':end_datetime, 'frequency':frequency}
+
     
-    return redirect(url_for('home'))
+    #print(time_dict)
+    # for key in time_dict.keys():
+    #     print(f'{key} = {time_dict[key]}')
+        
+    # for key in sensor_dict.keys():
+    #     print(f'{key} = {sensor_dict[key]}')
+
+    #return body
+    return requests.post(compute_url, params=params, json=data)
 
 
 
