@@ -7,9 +7,10 @@ from airu_flask import app, bq_client, firestore_client, firestore_auth, pyrebas
 from airu_flask.models import User
 from flask_login import login_user, current_user, logout_user
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from tzlocal import get_localzone
+import requests
 
 load_dotenv()
 
@@ -408,6 +409,11 @@ def applyCorrectionFactor(factors, data_timestamp, data):
     return data
 
 
+def myconverter(o):
+    if isinstance(o, datetime):
+        return o.strftime('%Y-%m-%d %H:%M:%S%z')
+
+
 @app.route("/oleks_request/", methods=['GET'])
 def oleks_request ():
     query_parameters = request.args
@@ -443,12 +449,20 @@ def oleks_request ():
 
     start_date_MT = start_datetime.astimezone(pytz.timezone('US/Mountain'))
     end_date_MT = end_datetime.astimezone(pytz.timezone('US/Mountain'))
-    start_date_MT_str = start_date_MT.strftime("%Y-%m-%d %H:%M:%S")
-    end_date_MT_str = end_date_MT.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Take data some time before and some time after the requested times for more accuracy
+    start_minus = start_date_MT - timedelta(minutes=10)
+    end_plus = end_date_MT + timedelta(minutes=10)
+
+    start_date_MT_str = start_minus.strftime("%Y-%m-%d %H:%M:%S")
+    end_date_MT_str = end_plus.strftime("%Y-%m-%d %H:%M:%S")
+
     print(start_date_MT.strftime("%Y-%m-%d %H:%M:%S"))
     print(end_date_MT.strftime("%Y-%m-%d %H:%M:%S"))
 
-    data = request_model_data_local(lat, lon, 1, start_date_MT_str, end_date_MT_str)
+    data = request_model_data_local(lat, lon, 2, start_date_MT_str, end_date_MT_str)
+    for datum in data:
+        datum['date_time'] = datum['date_time'].strftime("%Y-%m-%d %H:%M:%S%z")
 
     # TODO apply correction factors to the data!
 
@@ -460,9 +474,12 @@ def oleks_request ():
         time_dict[point['date_time']] = 1 + (time_dict[point['date_time']] if point['date_time'] in time_dict else 0)
         sensor_dict[point['device_id']] = 1 + (sensor_dict[point['device_id']] if point['device_id'] in sensor_dict else 0)
 
-    compute_url = 'localhost:5001/compute'
-    params = {'lat':lat, 'lon':lon, 'start_date':start_datetime, 'end_date':end_datetime, 'frequency':frequency}
-
+    compute_url = 'http://localhost:5000/compute'
+    start_param = start_datetime.strftime('%Y-%m-%d %H:%M:%S%z') # %Y-%m-%d %H:%M:%S%z
+    end_param = end_datetime.strftime('%Y-%m-%d %H:%M:%S%z')
+    params = {'lat':lat, 'lon':lon, 'start_date':start_param, 'end_date':end_param, 'frequency':frequency}
+    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+    print('params = ', params)
     
     #print(time_dict)
     # for key in time_dict.keys():
@@ -471,8 +488,18 @@ def oleks_request ():
     # for key in sensor_dict.keys():
     #     print(f'{key} = {sensor_dict[key]}')
 
-    #return body
-    return requests.post(compute_url, params=params, json=data)
+    data_to_send = json.dumps(data, default = myconverter)
+    print(data_to_send)
+    
+    response = requests.post(compute_url, params=params, headers=headers, json=data)
+    if response.status_code is not 200:
+        resp = jsonify({'error':response.status_code, 'message':'Computational server failed!'})
+        resp.status_code = response.status_code
+        return resp
+
+    # response = requests.post(compute_url, params=params, data=jsonify(data))
+    print(response.status_code)
+    return jsonify(response.json())
 
 
 
