@@ -12,6 +12,8 @@ import pytz
 from tzlocal import get_localzone
 import requests
 
+import airu_flask.utils as utils
+
 load_dotenv()
 
 projectId = os.getenv("PROJECTID")
@@ -288,10 +290,16 @@ def request_sensor_data():
     return jsonify(sensor_list)
 
 
+# ***********************************************************
+# Function: request_model_data_local
+# Usage: Return all sensor data within a specified radius and date range
+# Arguments: float lat, float lon, float radius, datetime start_date datetime end_date 
+# Return: list of ALL entries for all devices within radius distance of lat lon in the past number of days
+# ***********************************************************
 def request_model_data_local(lat, lon, radius, start_date, end_date):
     print('RUNNING request_model_data_local')
-    query_start_date = str(start_date) + ' America/Denver'
-    query_end_date = str(end_date) + ' America/Denver'
+    query_start_date = start_date.strftime("%Y-%m-%d %H:%M:%S") + ' America/Denver'
+    query_end_date = end_date.strftime("%Y-%m-%d %H:%M:%S") + ' America/Denver'
     print('lat=', lat)
     print('lon=', lon)
     print('start_date=', query_start_date)
@@ -346,161 +354,93 @@ def request_model_data():
     lat = query_parameters.get('lat')
     lon = query_parameters.get('lon')
     radius = query_parameters.get('radius')
-    start_date = query_parameters.get('start_date').replace('/', ' ')
-    end_date = query_parameters.get('end_date').replace('/', ' ')
 
-    return jsonify(request_model_data_local(lat, lon, radius, start_date, end_date))
-    
-    # print('RUNNING request_model_data')
-    # print('lat=', lat)
-    # print('lon=', lon)
-    # print('start_date=', start_date)
-    # print('end_date=', end_date)
-    # print('radius=', radius)
+    start_date = utils.parseDateTimeParameter(query_parameters.get('start_date'))
+    end_date = utils.parseDateTimeParameter(query_parameters.get('end_date'))
+    if not start_date or not end_date:
+        return '400 Bad Request: Unable to parse start_date or end_date. Required format: %Y-%m-%d/%H:%M:%S'
 
     # # TODO valudate lat/lon format
-    # # TODO validate date format
     # # TODO validate # num days (set min/max limit)
 
-
-    # model_data = []
-    # # get the latest sensor data from each sensor
-    # q = ("SELECT * "
-    #     "FROM `scottgale.airu_dataset_iot.airU_sensor` " 
-    #     "WHERE acos(sin(LAT * 0.0175) * sin(40.6789 * 0.0175) + cos(LAT * 0.0175) * cos(" + str(lat) + " * 0.0175) "
-    #      "* cos((" + str(lon) + " * 0.0175) - (LON * 0.0175))) * 3959 <= " + str(radius) + " "
-    #     "AND TIMESTAMP IN ("
-    #     "SELECT TIMESTAMP "
-    #     "FROM `scottgale.airu_dataset_iot.airU_sensor` "
-    #     "WHERE TIMESTAMP > '" + start_date + "' AND TIMESTAMP < '" + end_date + "' )"
-    #     "ORDER BY TIMESTAMP ASC;")
-
-    # query_job = bq_client.query(q)
-    # if query_job.error_result:
-    #     return "Invalid API call - check documentation."
-    # rows = query_job.result()  # Waits for query to finish
-
-    # for row in rows:
-    #     model_data.append({"device_id": row.DEVICE_ID,
-    #                        "date_time": row.TIMESTAMP,
-    #                        "pm1": row.PM1,
-    #                        "pm25": row.PM25,
-    #                        "pm10": row.PM10,
-    #                        "hum": row.HUM,
-    #                        "temp": row.TEMP,
-    #                        "lat": row.LAT,
-    #                        "lon": row.LON,
-    #                        "alt": row.ALT,
-    #                        "co": row.CO,
-    #                        "nox": row.NOX,
-    #                        "ver": row.VER})
-
-    # return jsonify(model_data)
+    return jsonify(request_model_data_local(lat, lon, radius, start_date, end_date))
 
 
-def applyCorrectionFactor(factors, data_timestamp, data):
-    for factor in factors:
-        factor_start = factor['start_date']
-        factor_end = factor['end_date']
-        if factor_start <= data_timestamp and factor_end > data_timestamp:
-            print('\nUSING FACTOR: ', factor, '\n')
-            return data*factor['sensor_1003_slope'] + factor['sensor_1003_intercept']
-    print('\nNo correction factor found for ', data_timestamp, '\n')
-    return data
-
-
-def myconverter(o):
-    if isinstance(o, datetime):
-        return o.strftime('%Y-%m-%d %H:%M:%S%z')
-
-
+# ***********************************************************
+# Function: oleks_request
+# Usage: Return pm25 predictions for the specified location and time range
+# Query Parameters: lat, lon, start_date, end_date, frequency(minutes)
+# Acceptable Date formats: %Y-%m-%d/%H:%M:%S%z, %Y-%m-%d %H:%M:%S%z, %Y-%m-%d/%H:%M:%S, %Y-%m-%d %H:%M:%S
+#   Assumes Mountain Time when no time zone provided. Time Zone must be (+,-)xxxx
+# Return: List of predictions of the form [ {lat, lon, datetime, pm25, variance}, ... ]
+# ***********************************************************
 @app.route("/oleks_request/", methods=['GET'])
 def oleks_request ():
+    # step 0, parse query parameters
     query_parameters = request.args
-    lat = query_parameters.get('lat')
-    lon = query_parameters.get('lon')
-    start_date = query_parameters.get('start_date')
-    end_date = query_parameters.get('end_date')
-    frequency = query_parameters.get('frequency') # in minutes
+    query_lat = float(query_parameters.get('lat'))
+    query_lon = float(query_parameters.get('lon'))
+    query_start_datetime = utils.parseDateTimeParameter(query_parameters.get('start_date'))
+    query_end_datetime = utils.parseDateTimeParameter(query_parameters.get('end_date'))
+    query_frequency = float(query_parameters.get('frequency'))
 
-    # artificially set time zone to UTC 0 so that
-    start_datetime = datetime.strptime(start_date, '%Y-%m-%d/%H:%M:%S%z')
-    end_datetime   = datetime.strptime(end_date, '%Y-%m-%d/%H:%M:%S%z')
-    # start_datetime = datetime.strptime(start_date, '%Y-%m-%d/%H:%M:%S')
-    # end_datetime   = datetime.strptime(end_date, '%Y-%m-%d/%H:%M:%S')
+    if not query_start_datetime or not query_end_datetime:
+        return '400 Bad Request: Unable to parse start_date or end_date. Required format: %Y-%m-%d/%H:%M:%S%z'
 
-    print('lat=', lat)
-    print('lon=', lon)
-    print('start_date=', start_datetime)
-    print('end_date=', end_datetime)
-    print('frequency=', frequency)
+    print(f'Query parameters: lat={query_lat} lon={query_lon} start_date={query_start_datetime} end_date={query_end_datetime} frequency={query_frequency}')
 
-    # step 1, load up correction factors
-    corrections_ref = firestore_client.collection('correction_factors')
-    asdf = corrections_ref.stream()
-    correction_factors = []
-    for doc in asdf:
-        correction_factors.append(doc.to_dict())
+    # step 1, load up correction factors from the firestore
+    correction_factors = [document.to_dict() for document in firestore_client.collection('correction_factors').stream()]
+    print(f'Loaded {len(correction_factors)} correction factors from firestore.')
+    print(correction_factors, '\n')
 
-    print(correction_factors)
-    applyCorrectionFactor(correction_factors, end_datetime, 10)
+    # step 2, load up length scales from the firestore
+    length_scales = [document.to_dict() for document in firestore_client.collection('length_scales').stream()]
+    print(f'Loaded {len(length_scales)} length scales from firestore.')
 
-    # step 2, query relevent data
-
-    start_date_MT = start_datetime.astimezone(pytz.timezone('US/Mountain'))
-    end_date_MT = end_datetime.astimezone(pytz.timezone('US/Mountain'))
+    print('Loaded length scales:', length_scales, '\n')
+    length_scales = utils.getScalesInTimeRange(length_scales, query_start_datetime, query_end_datetime)
+    if len(length_scales) != 1:
+        return f'400 Bad Request: Incorrent number of length scales({len(length_scales)}) found in between {query_start_datetime} and {query_end_datetime}'
     
-    # Take data some time before and some time after the requested times for more accuracy
-    start_minus = start_date_MT - timedelta(minutes=10)
-    end_plus = end_date_MT + timedelta(minutes=10)
+    latlon_length_scale = length_scales[0]['latlon']
+    elevation_length_scale = length_scales[0]['elevation']
+    time_length_scale = length_scales[0]['time']
 
-    start_date_MT_str = start_minus.strftime("%Y-%m-%d %H:%M:%S")
-    end_date_MT_str = end_plus.strftime("%Y-%m-%d %H:%M:%S")
+    print(f'Using length scales: latlon={latlon_length_scale} elevation={elevation_length_scale} time={time_length_scale}')
 
-    print(start_date_MT.strftime("%Y-%m-%d %H:%M:%S"))
-    print(end_date_MT.strftime("%Y-%m-%d %H:%M:%S"))
+    # step 3, query relevent data
 
-    data = request_model_data_local(lat, lon, 2, start_date_MT_str, end_date_MT_str)
-    for datum in data:
-        datum['date_time'] = datum['date_time'].strftime("%Y-%m-%d %H:%M:%S%z")
+    # Take data before and after the requested times by 1 length scale
+    sensor_data = request_model_data_local(
+                    lat=query_lat, 
+                    lon=query_lon, 
+                    radius=20, 
+                    start_date=query_start_datetime - timedelta(hours=time_length_scale), 
+                    end_date=query_end_datetime + timedelta(hours=time_length_scale))
+    print(f'Loaded {len(sensor_data)} data points from bgquery.')
 
-    # TODO apply correction factors to the data!
+    # step 4 Data Screening
+    ##########################################
+    # Data Screening and Dealing with Two sensors at one Location
+    # Screening for your time period of interest
+    # -        Exclude a sensor if 24 hour average readings exceed 350 ug/m3.
+    # Two sensors at one GPS Location - Note Purple Air IIs (5003s) contain two sensors per package.  EPA addresses this by:
+    # * Removing both 5003s from the model if:
+    # * Raw 24-hour average PM2.5 levels are > 5 ug/m3 AND the two sensors differ by more than 16%.  
+    # * Otherwise just average the two readings and correct as normal.
+    ##########################################
 
 
-    print(f'Got {len(data)} data points')
-    time_dict = {}
-    sensor_dict = {}
-    for point in data:
-        time_dict[point['date_time']] = 1 + (time_dict[point['date_time']] if point['date_time'] in time_dict else 0)
-        sensor_dict[point['device_id']] = 1 + (sensor_dict[point['device_id']] if point['device_id'] in sensor_dict else 0)
+    # step 5 apply correction factors to the data!
+    for datum in sensor_data:
+        # TODO figure out which type of sensor it is using datum['device_id']
+        datum['pm25'] = utils.applyCorrectionFactor(correction_factors, datum['date_time'], datum['pm25'])
 
-    compute_url = 'http://localhost:5000/compute'
-    start_param = start_datetime.strftime('%Y-%m-%d %H:%M:%S%z') # %Y-%m-%d %H:%M:%S%z
-    end_param = end_datetime.strftime('%Y-%m-%d %H:%M:%S%z')
-    params = {'lat':lat, 'lon':lon, 'start_date':start_param, 'end_date':end_param, 'frequency':frequency}
-    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-    print('params = ', params)
-    
-    #print(time_dict)
-    # for key in time_dict.keys():
-    #     print(f'{key} = {time_dict[key]}')
-        
-    # for key in sensor_dict.keys():
-    #     print(f'{key} = {sensor_dict[key]}')
+    # step 6 TODO get predictions from model
 
-    data_to_send = json.dumps(data, default = myconverter)
-    print(data_to_send)
-    
-    response = requests.post(compute_url, params=params, headers=headers, json=data)
-    if response.status_code is not 200:
-        resp = jsonify({'error':response.status_code, 'message':'Computational server failed!'})
-        resp.status_code = response.status_code
-        return resp
 
-    # response = requests.post(compute_url, params=params, data=jsonify(data))
-    print(response.status_code)
-    return jsonify(response.json())
-
+    return jsonify(data)
 
 
 def parse_device_list(device_list):
