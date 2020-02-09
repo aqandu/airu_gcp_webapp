@@ -13,6 +13,7 @@ from tzlocal import get_localzone
 import requests
 
 import airu_flask.utils as utils
+import airu_flask.gaussian_model_utils as model_utils
 
 load_dotenv()
 
@@ -358,7 +359,9 @@ def request_model_data():
     start_date = utils.parseDateTimeParameter(query_parameters.get('start_date'))
     end_date = utils.parseDateTimeParameter(query_parameters.get('end_date'))
     if not start_date or not end_date:
-        return '400 Bad Request: Unable to parse start_date or end_date. Required format: %Y-%m-%d/%H:%M:%S'
+        response = jsonify(f'400 Bad Request: Unable to parse start_date or end_date. Required format: %Y-%m-%d/%H:%M:%S')
+        response.status_code = 400
+        return response
 
     # # TODO valudate lat/lon format
     # # TODO validate # num days (set min/max limit)
@@ -385,7 +388,9 @@ def oleks_request ():
     query_frequency = float(query_parameters.get('frequency'))
 
     if not query_start_datetime or not query_end_datetime:
-        return '400 Bad Request: Unable to parse start_date or end_date. Required format: %Y-%m-%d/%H:%M:%S%z'
+        response = jsonify(f'400 Bad Request: Unable to parse start_date or end_date. Required format: %Y-%m-%d/%H:%M:%S%z')
+        response.status_code = 400
+        return response
 
     print(f'Query parameters: lat={query_lat} lon={query_lon} start_date={query_start_datetime} end_date={query_end_datetime} frequency={query_frequency}')
 
@@ -401,7 +406,9 @@ def oleks_request ():
     print('Loaded length scales:', length_scales, '\n')
     length_scales = utils.getScalesInTimeRange(length_scales, query_start_datetime, query_end_datetime)
     if len(length_scales) != 1:
-        return f'400 Bad Request: Incorrent number of length scales({len(length_scales)}) found in between {query_start_datetime} and {query_end_datetime}'
+        response = jsonify(f'400 Bad Request: Incorrent number of length scales({len(length_scales)}) found in between {query_start_datetime} and {query_end_datetime}')
+        response.status_code = 400
+        return response
     
     latlon_length_scale = length_scales[0]['latlon']
     elevation_length_scale = length_scales[0]['elevation']
@@ -415,12 +422,20 @@ def oleks_request ():
     sensor_data = request_model_data_local(
                     lat=query_lat, 
                     lon=query_lon, 
-                    radius=20, 
+                    radius=latlon_length_scale/1000, 
                     start_date=query_start_datetime - timedelta(hours=time_length_scale), 
                     end_date=query_end_datetime + timedelta(hours=time_length_scale))
     print(f'Loaded {len(sensor_data)} data points from bgquery.')
 
-    # step 4 Data Screening
+    # step 3.5, convert lat/lon to UTM coordinates
+    try:
+        utils.convertLatLonToUTM(sensor_data)
+    except ValueError as err:
+        response = jsonify(f'400 Bad Request: {str(err)}')
+        response.status_code = 400
+        return response
+
+    # step 4, TODO Data Screening
     ##########################################
     # Data Screening and Dealing with Two sensors at one Location
     # Screening for your time period of interest
@@ -432,15 +447,24 @@ def oleks_request ():
     ##########################################
 
 
-    # step 5 apply correction factors to the data!
+    # step 5, TODO apply correction factors to the data!
     for datum in sensor_data:
         # TODO figure out which type of sensor it is using datum['device_id']
         datum['pm25'] = utils.applyCorrectionFactor(correction_factors, datum['date_time'], datum['pm25'])
 
-    # step 6 TODO get predictions from model
+    # step 5.5, TODO add elevation values to the data!
+    TODO_TEMP_ELEVATION = 1300
+    for datum in sensor_data:
+        datum['elevation'] = TODO_TEMP_ELEVATION
 
+    # step 6, Create Model
+    model, time_offset = model_utils.createModel(sensor_data, latlon_length_scale, elevation_length_scale, time_length_scale)
 
-    return jsonify(data)
+    # step 7, get predictions from model
+    query_dates = utils.interpolateQueryDates(query_start_datetime, query_end_datetime, query_frequency)
+    predictions = model_utils.predictUsingModel(model, query_lat, query_lon, TODO_TEMP_ELEVATION, query_dates, time_offset)
+
+    return jsonify(predictions)
 
 
 def parse_device_list(device_list):
