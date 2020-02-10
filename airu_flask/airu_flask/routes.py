@@ -14,6 +14,7 @@ import requests
 
 import airu_flask.utils as utils
 import airu_flask.gaussian_model_utils as model_utils
+from airu_flask import elevation_interpolator
 
 load_dotenv()
 
@@ -294,7 +295,7 @@ def request_sensor_data():
 # ***********************************************************
 # Function: request_model_data_local
 # Usage: Return all sensor data within a specified radius and date range
-# Arguments: float lat, float lon, float radius, datetime start_date datetime end_date 
+# Arguments: float lat, float lon, float radius (miles), datetime start_date, datetime end_date 
 # Return: list of ALL entries for all devices within radius distance of lat lon in the past number of days
 # ***********************************************************
 def request_model_data_local(lat, lon, radius, start_date, end_date):
@@ -346,7 +347,7 @@ def request_model_data_local(lat, lon, radius, start_date, end_date):
 # ***********************************************************
 # Function: request_model_data
 # Usage: Return all sensor data within a specified radius and date range
-# Query Parameters: center_point, radius, start_date, end_date
+# Query Parameters: latitude, longitude, radius(miles), start_date, end_date
 # Return: JSON object ALL entries for the specified device in the past number of days
 # ***********************************************************
 @app.route("/request_model_data/", methods=['GET'])
@@ -418,11 +419,14 @@ def oleks_request ():
 
     # step 3, query relevent data
 
+    # takes data in length scale radius around the query
+    NUM_METERS_IN_MILE = 1609.34
+    radius = latlon_length_scale/NUM_METERS_IN_MILE # convert meters to miles for db query
     # Take data before and after the requested times by 1 length scale
     sensor_data = request_model_data_local(
                     lat=query_lat, 
                     lon=query_lon, 
-                    radius=latlon_length_scale/1000, 
+                    radius=radius, 
                     start_date=query_start_datetime - timedelta(hours=time_length_scale), 
                     end_date=query_end_datetime + timedelta(hours=time_length_scale))
     print(f'Loaded {len(sensor_data)} data points from bgquery.')
@@ -452,17 +456,17 @@ def oleks_request ():
         # TODO figure out which type of sensor it is using datum['device_id']
         datum['pm25'] = utils.applyCorrectionFactor(correction_factors, datum['date_time'], datum['pm25'])
 
-    # step 5.5, TODO add elevation values to the data!
-    TODO_TEMP_ELEVATION = 1300
+    # step 6, add elevation values to the data!
     for datum in sensor_data:
-        datum['elevation'] = TODO_TEMP_ELEVATION
+        datum['elevation'] = elevation_interpolator([datum['lat']], [datum['lon']])[0]
 
-    # step 6, Create Model
+    # step 7, Create Model
     model, time_offset = model_utils.createModel(sensor_data, latlon_length_scale, elevation_length_scale, time_length_scale)
 
-    # step 7, get predictions from model
+    # step 8, get predictions from model
     query_dates = utils.interpolateQueryDates(query_start_datetime, query_end_datetime, query_frequency)
-    predictions = model_utils.predictUsingModel(model, query_lat, query_lon, TODO_TEMP_ELEVATION, query_dates, time_offset)
+    query_elevation = elevation_interpolator([query_lat], [query_lon])[0]
+    predictions = model_utils.predictUsingModel(model, query_lat, query_lon, query_elevation, query_dates, time_offset)
 
     return jsonify(predictions)
 

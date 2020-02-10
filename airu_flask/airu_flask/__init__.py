@@ -40,4 +40,20 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 
 login_manager = LoginManager(app)
 
+
+# Load up elevation grid
+import scipy
+import numpy as np
+from scipy import interpolate
+from scipy.io import loadmat
+
+def setupElevationInterpolator(filename):
+    data = loadmat(filename)
+    elevation_grid = data['elevs']
+    gridLongs = data['gridLongs']
+    gridLats = data['gridLats']
+    return interpolate.interp2d(gridLongs,gridLats,elevation_grid,kind='cubic')
+
+elevation_interpolator = setupElevationInterpolator('elevationMap.mat')
+
 from airu_flask import routes

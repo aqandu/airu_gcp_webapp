@@ -190,6 +190,6 @@ def predictUsingModel(model, lat, lon, elevation, query_dates, time_offset):
     yPred = [float(value) for value in yPred[0]]
     yVar = [float(value) for value in yVar[0]]
 
-    predictions = [{'pm25': pred, 'variance':var, 'datetime':date.strftime('%Y-%m-%d %H:%M:%S%z'), 'lat':lat, 'lon':lon} for pred, var, date in zip(yPred, yVar, query_dates)]
+    predictions = [{'pm25': pred, 'variance':var, 'datetime':date.strftime('%Y-%m-%d %H:%M:%S%z'), 'lat':lat, 'lon':lon, 'elev':elevation} for pred, var, date in zip(yPred, yVar, query_dates)]
     
     return predictions
