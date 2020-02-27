@@ -56,6 +56,7 @@ def on_message(client, userdata, msg):
         'NOX': packet[13][3:],
         'LAT': packet[5][9:],
         'LON': packet[6][10:],
+        'ALT': packet[4][9:],
         'VER': 1
     }
     # print(data)

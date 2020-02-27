@@ -9,7 +9,7 @@ from firebase_admin import credentials, firestore, auth, exceptions
 
 import pyrebase
 
-load_dotenv()
+load_dotenv()       # reference to the .env file that contains account information
 
 # This configuration is used for Firebase connection
 config = {

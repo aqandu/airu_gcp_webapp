@@ -425,13 +425,13 @@ function load_active_sensors(d){
     let data = [];
     // Eliminate all data with not associated with selected version (VER)
     for (let i = 0; i < d.length; i++) {
-        if (document.getElementById("v1").checked && d[i].VER === '1'){
+        if (document.getElementById("v1").checked && d[i].VER === '1.3'){
            data.push(d[i]);
         }
-        if (document.getElementById("v2").checked && d[i].VER === '2'){
+        if (document.getElementById("v2").checked && d[i].VER === '2.3'){
             data.push(d[i]);
         }
-        if (document.getElementById("v3").checked && d[i].VER === '3'){
+        if (document.getElementById("w").checked && d[i].VER === 'w'){
             data.push(d[i]);
         }
         if (d[i].VER === ""){  // Add sensors without a version

@@ -7,6 +7,7 @@ from airu_flask import app, bq_client, firestore_client, firestore_auth, pyrebas
 from airu_flask.models import User
 from flask_login import login_user, current_user, logout_user
 import json
+import time
 
 load_dotenv()
 
@@ -337,6 +338,50 @@ def request_model_data():
                            "ver": row.VER})
 
     return jsonify(model_data)
+
+
+# ***********************************************************
+# Function: save_wear_data
+# Usage: Get data from wearable and save to BQ Database
+# Query Parameters: N/A
+# Return: N/A
+# ***********************************************************
+@app.route("/save_wear_data", methods=['POST'])
+def save_wear_data():
+    # Process data
+    data = json.loads(request.get_data())
+
+    device_id = "M" + data['DEVICE_ID']
+    pm1 = data['PM1']
+    pm25 = data['PM25']
+    pm10 = data['PM10']
+    lat = data["LAT"]
+    lon = data["LON"]
+    if "TIMESTAMP" in data:
+        timestamp = data["TIMESTAMP"]
+    else:
+        timestamp = time.time()
+
+    table = bq_client.get_table(sensor_table)  # Make an API request.
+    rows_to_insert = [
+        {"DEVICE_ID": device_id,
+        "PM1": pm1,
+        "PM25": pm25,
+        "PM10": pm10,
+        "LAT": lat,
+        "LON": lon,
+        "TIMESTAMP": timestamp,
+        "VER": 'w'}]
+
+    errors = bq_client.insert_rows(table, rows_to_insert)  # Make an API request.
+    if errors == []:
+        return "Insert successful"
+    else:
+        error_string = ""
+        for i in range (len(errors)):
+            error_string += errors[i] + " "
+
+    return error_string
 
 
 def parse_device_list(device_list):
