@@ -3,12 +3,17 @@ import pytz
 import utm
 
 
-def applyCorrectionFactor(factors, data_timestamp, data):
+def applyCorrectionFactor(factors, data_timestamp, data, sensor_type):
     for factor in factors:
         factor_start = factor['start_date']
         factor_end = factor['end_date']
         if factor_start <= data_timestamp and factor_end > data_timestamp:
-            return data*factor['sensor_1003_slope'] + factor['sensor_1003_intercept']
+            if sensor_type == '1003':
+                return data*factor['1003_slope'] + factor['1003_intercept']
+            elif sensor_type == '3003':
+                return data*factor['3003_slope'] + factor['3003_intercept']
+            elif sensor_type == '5003':
+                return data*factor['5003_slope'] + factor['5003_intercept']
     print('\nNo correction factor found for ', data_timestamp)
     return data
 

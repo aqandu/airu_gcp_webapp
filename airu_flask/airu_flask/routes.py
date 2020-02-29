@@ -439,7 +439,21 @@ def oleks_request ():
         response.status_code = 400
         return response
 
-    # step 4, TODO Data Screening
+    # Step 4, parse sensor type from the version
+    for datum in sensor_data:
+        print(datum)
+        if datum['ver'] == None:
+            datum['type'] = '3003'
+            continue
+        versionSplit = datum['ver'].split('.')
+        if len(versionSplit) == 1 or versionSplit[1] == '3':
+            datum['type'] = '3003'
+        elif versionSplit[1] == '1':
+            datum['type'] = '1003'
+        elif versionSplit[1] == '5':
+            datum['type'] = '5003'
+
+    # step 4.5, TODO Data Screening
     ##########################################
     # Data Screening and Dealing with Two sensors at one Location
     # Screening for your time period of interest
@@ -451,10 +465,9 @@ def oleks_request ():
     ##########################################
 
 
-    # step 5, TODO apply correction factors to the data!
+    # step 5, apply correction factors to the data!
     for datum in sensor_data:
-        # TODO figure out which type of sensor it is using datum['device_id']
-        datum['pm25'] = utils.applyCorrectionFactor(correction_factors, datum['date_time'], datum['pm25'])
+        datum['pm25'] = utils.applyCorrectionFactor(correction_factors, datum['date_time'], datum['pm25'], datum['type'])
 
     # step 6, add elevation values to the data!
     for datum in sensor_data:
