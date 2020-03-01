@@ -312,12 +312,58 @@ def request_model_data_local(lat, lon, radius, start_date, end_date):
     model_data = []
     # get the latest sensor data from each sensor
     q = ("SELECT * "
-        "FROM `scottgale.airu_dataset_iot.airU_sensor` " 
+        "FROM `" + sensor_table + "` " 
         "WHERE acos(sin(LAT * 0.0175) * sin(40.6789 * 0.0175) + cos(LAT * 0.0175) * cos(" + str(lat) + " * 0.0175) "
          "* cos((" + str(lon) + " * 0.0175) - (LON * 0.0175))) * 3959 <= " + str(radius) + " "
         "AND TIMESTAMP IN ("
         "SELECT TIMESTAMP "
-        "FROM `scottgale.airu_dataset_iot.airU_sensor` "
+        "FROM `" + sensor_table + "` "
+        "WHERE TIMESTAMP > '" + query_start_date + "' AND TIMESTAMP < '" + query_end_date + "' )"
+        "ORDER BY TIMESTAMP ASC;")
+
+    query_job = bq_client.query(q)
+    if query_job.error_result:
+        return "Invalid API call - check documentation."
+    rows = query_job.result()  # Waits for query to finish
+
+    for row in rows:
+        model_data.append({"device_id": row.DEVICE_ID,
+                           "date_time": row.TIMESTAMP,
+                           "pm1": row.PM1,
+                           "pm25": row.PM25,
+                           "pm10": row.PM10,
+                           "hum": row.HUM,
+                           "temp": row.TEMP,
+                           "lat": row.LAT,
+                           "lon": row.LON,
+                           "alt": row.ALT,
+                           "co": row.CO,
+                           "nox": row.NOX,
+                           "ver": row.VER})
+
+    return model_data
+
+# ***********************************************************
+# Function: request_model_data_local
+# Usage: Return all sensor data within a specified radius and date range
+# Arguments: float lat, float lon, float radius (miles), datetime start_date, datetime end_date 
+# Return: list of ALL entries for all devices within radius distance of lat lon in the past number of days
+# ***********************************************************
+def request_model_data_local2(start_date, end_date):
+    print('RUNNING request_model_data_local2')
+    query_start_date = start_date.strftime("%Y-%m-%d %H:%M:%S") + ' America/Denver'
+    query_end_date = end_date.strftime("%Y-%m-%d %H:%M:%S") + ' America/Denver'
+    print('start_date=', query_start_date)
+    print('end_date=', query_end_date)
+    
+
+    model_data = []
+    # get the latest sensor data from each sensor
+    q = ("SELECT * "
+        "FROM `" + sensor_table + "` " 
+        "WHERE TIMESTAMP IN ("
+        "SELECT TIMESTAMP "
+        "FROM `" + sensor_table + "` "
         "WHERE TIMESTAMP > '" + query_start_date + "' AND TIMESTAMP < '" + query_end_date + "' )"
         "ORDER BY TIMESTAMP ASC;")
 
@@ -368,6 +414,24 @@ def request_model_data():
     # # TODO validate # num days (set min/max limit)
 
     return jsonify(request_model_data_local(lat, lon, radius, start_date, end_date))
+
+
+
+# ***********************************************************
+@app.route("/get_device_list/", methods=['GET'])
+def get_device_list():
+    
+    # get the latest sensor data from each sensor
+    q = ("SELECT DISTINCT DEVICE_ID "
+        "FROM " + sensor_table + ";")
+
+    query_job = bq_client.query(q)
+    if query_job.error_result:
+        return "Invalid API call - check documentation."
+    rows = query_job.result()  # Waits for query to finish
+
+    device_list = [row.DEVICE_ID for row in rows]
+    return jsonify(device_list)
 
 
 # ***********************************************************
@@ -422,15 +486,19 @@ def oleks_request ():
     # takes data in length scale radius around the query
     NUM_METERS_IN_MILE = 1609.34
     radius = latlon_length_scale/NUM_METERS_IN_MILE # convert meters to miles for db query
-    radius = 50
+    radius = 5000
     # Take data before and after the requested times by 1 length scale
-    sensor_data = request_model_data_local(
-                    lat=query_lat, 
-                    lon=query_lon, 
-                    radius=radius, 
+    # sensor_data = request_model_data_local(
+    #                 lat=query_lat, 
+    #                 lon=query_lon, 
+    #                 radius=radius, 
+    #                 start_date=query_start_datetime - timedelta(hours=time_length_scale), 
+    #                 end_date=query_end_datetime + timedelta(hours=time_length_scale))
+    sensor_data = request_model_data_local2(
                     start_date=query_start_datetime - timedelta(hours=time_length_scale), 
                     end_date=query_end_datetime + timedelta(hours=time_length_scale))
-    print(f'Loaded {len(sensor_data)} data points from bgquery.')
+    unique_sensors = {datum['device_id'] for datum in sensor_data}
+    print(f'Loaded {len(sensor_data)} data points for {len(unique_sensors)} unique devices from bgquery.')
 
     # step 3.5, convert lat/lon to UTM coordinates
     try:
@@ -439,6 +507,12 @@ def oleks_request ():
         response = jsonify(f'400 Bad Request: {str(err)}')
         response.status_code = 400
         return response
+
+    sensor_data = [datum for datum in sensor_data if datum['zone_num'] ==12]
+
+    unique_sensors = {datum['device_id'] for datum in sensor_data}
+    print(f'After removing points with zone num != 12: {len(sensor_data)} data points for {len(unique_sensors)} unique devices.')
+
 
     # Step 4, parse sensor type from the version
     for datum in sensor_data:
@@ -468,6 +542,11 @@ def oleks_request ():
     model, time_offset = model_utils.createModel(sensor_data, latlon_length_scale, elevation_length_scale, time_length_scale)
 
     
+    latlon_length_scale, elevation_length_scale, time_length_scale = model.getLengthScales()
+    print(f'before training scales: latlon {latlon_length_scale}, elev {elevation_length_scale}, time {time_length_scale}')
+    model.train_adam(5,0.1)    #optimize hyperparameter using adam optimizer
+    latlon_length_scale, elevation_length_scale, time_length_scale = model.getLengthScales()
+    print(f'before training scales: latlon {latlon_length_scale}, elev {elevation_length_scale}, time {time_length_scale}')
 
 
     # step 8, get predictions from model

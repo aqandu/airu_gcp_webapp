@@ -13,7 +13,7 @@ TIME_COORDINATE_BIN_NUMBER_KEY = 'time_coordinate_bin_number'
 def getTimeCoordinateBin(datetime, time_offset = 0):
     delta = datetime - JANUARY1ST
     NUM_MINUTES_PER_BIN = 10
-    bin_number = float(int(delta.total_seconds() / 60 * NUM_MINUTES_PER_BIN) / 60 / NUM_MINUTES_PER_BIN)
+    bin_number = float(int(delta.total_seconds() / 60 / NUM_MINUTES_PER_BIN) / 60 * NUM_MINUTES_PER_BIN)
     return bin_number - time_offset
 
 
@@ -159,30 +159,23 @@ def createModel(sensor_data, latlon_length_scale, elevation_length_scale, time_l
     time_coordinates = torch.tensor(time_coordinates)   #convert data to pytorch tensor
     data_matrix = torch.tensor(data_matrix)   #convert data to pytorch tensor
 
-    print(f'space_coordinates: {space_coordinates.shape}, time_coordinates: {time_coordinates.shape}, data: {data_matrix.shape}')
-    print(data_matrix)
-    print(space_coordinates)
-    print(time_coordinates)
+    # print(f'space_coordinates: {space_coordinates.shape}, time_coordinates: {time_coordinates.shape}, data: {data_matrix.shape}')
+    # print(data_matrix)
+    # print(space_coordinates)
+    # print(time_coordinates)
     model = gaussian_model(space_coordinates, time_coordinates, data_matrix,
              latlong_length_scale=float(latlon_length_scale),
              elevation_length_scale=float(elevation_length_scale),
              time_length_scale=float(time_length_scale),
              noise_variance=0.1)
              
-    print(f'before training scales: latlon {model.log_latlong_length_scale}, elev {model.log_elevation_length_scale}, time {model.log_time_length_scale}')
-    print(model.getLengthScales())
-    model.train_adam(5,0.1)    #optimize hyperparameter using adam optimizer
-    print(f'before training scales: latlon {model.log_latlong_length_scale}, elev {model.log_elevation_length_scale}, time {model.log_time_length_scale}')
-    print(model.getLengthScales())
-    
+
     return model, time_offset
 
 
 def predictUsingModel(model, lat, lon, elevation, query_dates, time_offset):
 
     time_coordinates = convertToTimeCoordinatesVector(query_dates, time_offset)
-    print(f'query_dates = {query_dates}')
-    print(f'time_coordinates = {time_coordinates}')
     
     x, y, zone_num, zone_let = utils.latlonToUTM(lat, lon)
     space_coordinates = numpy.ndarray(shape=(0, 3), dtype=float)
