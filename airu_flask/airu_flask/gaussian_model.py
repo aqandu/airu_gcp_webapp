@@ -67,6 +67,9 @@ class gaussian_model(nn.Module):
 
         self.update()
 
+    def getLengthScales(self):
+        return math.exp(self.log_latlong_length_scale), math.exp(self.log_elevation_length_scale), math.exp(self.log_time_length_scale)
+
     def SE_kernel(self, X, X2, length_scale):
         # length_scale MUST be positive
         X = X / length_scale.expand(X.size(0), X.size(1))

@@ -2,6 +2,13 @@ from datetime import datetime, timedelta
 import pytz
 import utm
 
+def removeInvalidSensors(sensor_data):
+    # TODO
+    # sensor is invalid its average reading for any day exceeds 350 ug/m3
+
+    # 5003 sensors are invalid if Raw 24-hour average PM2.5 levels are > 5 ug/m3 AND the two sensors differ by more than 16%
+    # * Otherwise just average the two readings and correct as normal.
+    return sensor_data
 
 def applyCorrectionFactor(factors, data_timestamp, data, sensor_type):
     for factor in factors:
@@ -60,6 +67,8 @@ def convertLatLonToUTM(sensor_data):
 
     for datum in sensor_data:
         datum['utm_x'], datum['utm_y'], zone_num, zone_let = latlonToUTM(datum['lat'], datum['lon'])
+        # datum['utm_x'] = datum['utm_x']*1000
+        # datum['utm_y'] = datum['utm_y']*1000
         provided_utm_zones.add(zone_num)
 
     if len(provided_utm_zones) is not 1:

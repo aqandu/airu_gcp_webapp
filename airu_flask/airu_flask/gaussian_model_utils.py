@@ -7,13 +7,13 @@ import torch
 
 
 JANUARY1ST = datetime(2000, 1, 1, 0, 0, 0, 0, pytz.timezone('UTC'))
-TIME_COORDINATE_BIN_SIZE = 1 # in minutes
 TIME_COORDINATE_BIN_NUMBER_KEY = 'time_coordinate_bin_number'
 
 
 def getTimeCoordinateBin(datetime, time_offset = 0):
     delta = datetime - JANUARY1ST
-    bin_number = int(delta.total_seconds() / 60 / TIME_COORDINATE_BIN_SIZE)
+    NUM_MINUTES_PER_BIN = 10
+    bin_number = float(int(delta.total_seconds() / 60 * NUM_MINUTES_PER_BIN) / 60 / NUM_MINUTES_PER_BIN)
     return bin_number - time_offset
 
 
@@ -86,7 +86,7 @@ def interpolateZeroElements(matrix):
         prevValueIndex = None
         for i in range(row.shape[0]):
             if row[i] != 0:
-                if not prevValueIndex:
+                if prevValueIndex is None:
                     prevValueIndex = i
                 else:
                     curValueIndex = i
@@ -120,6 +120,7 @@ def trimEdgeZeroElements(matrix, time_coordinates):
     # limit matrix to the range:
     matrix = matrix[:, maxFirstValue:minLastValue]
     time_coordinates = time_coordinates[maxFirstValue:minLastValue]
+
     return matrix, time_coordinates
 
 
@@ -137,13 +138,14 @@ def setupDataMatrix(sensor_data, space_coordinates, time_coordinates, device_loc
         location_index = device_location_map[datum['device_id']]
         # bound sensor data below by 0
         data_matrix[location_index][date_index] = datum['pm25'] if datum['pm25'] >= 0 else 0
-
-    #saveMatrixToFile(data_matrix, 'matrix.txt')
+    
+    saveMatrixToFile(data_matrix, '1matrix.txt')
     interpolateZeroElements(data_matrix)
+    saveMatrixToFile(data_matrix, '2interpolated.txt')
     data_matrix, space_coordinates = removeBadSensors(data_matrix, space_coordinates, 0.6)
-    #saveMatrixToFile(data_matrix, 'matrix_removed_bad.txt')
+    saveMatrixToFile(data_matrix, '3matrix_removed_bad.txt')
     data_matrix, time_coordinates = trimEdgeZeroElements(data_matrix, time_coordinates)
-    #saveMatrixToFile(data_matrix, 'matrixtrimmed.txt')
+    saveMatrixToFile(data_matrix, '4matrixtrimmed.txt')
     return data_matrix, space_coordinates, time_coordinates
 
 
@@ -158,13 +160,21 @@ def createModel(sensor_data, latlon_length_scale, elevation_length_scale, time_l
     data_matrix = torch.tensor(data_matrix)   #convert data to pytorch tensor
 
     print(f'space_coordinates: {space_coordinates.shape}, time_coordinates: {time_coordinates.shape}, data: {data_matrix.shape}')
-
+    print(data_matrix)
+    print(space_coordinates)
+    print(time_coordinates)
     model = gaussian_model(space_coordinates, time_coordinates, data_matrix,
              latlong_length_scale=float(latlon_length_scale),
              elevation_length_scale=float(elevation_length_scale),
              time_length_scale=float(time_length_scale),
              noise_variance=0.1)
              
+    print(f'before training scales: latlon {model.log_latlong_length_scale}, elev {model.log_elevation_length_scale}, time {model.log_time_length_scale}')
+    print(model.getLengthScales())
+    model.train_adam(5,0.1)    #optimize hyperparameter using adam optimizer
+    print(f'before training scales: latlon {model.log_latlong_length_scale}, elev {model.log_elevation_length_scale}, time {model.log_time_length_scale}')
+    print(model.getLengthScales())
+    
     return model, time_offset
 
 

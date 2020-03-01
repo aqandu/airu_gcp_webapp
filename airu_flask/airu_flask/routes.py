@@ -422,6 +422,7 @@ def oleks_request ():
     # takes data in length scale radius around the query
     NUM_METERS_IN_MILE = 1609.34
     radius = latlon_length_scale/NUM_METERS_IN_MILE # convert meters to miles for db query
+    radius = 50
     # Take data before and after the requested times by 1 length scale
     sensor_data = request_model_data_local(
                     lat=query_lat, 
@@ -441,7 +442,6 @@ def oleks_request ():
 
     # Step 4, parse sensor type from the version
     for datum in sensor_data:
-        print(datum)
         if datum['ver'] == None:
             datum['type'] = '3003'
             continue
@@ -454,16 +454,7 @@ def oleks_request ():
             datum['type'] = '5003'
 
     # step 4.5, TODO Data Screening
-    ##########################################
-    # Data Screening and Dealing with Two sensors at one Location
-    # Screening for your time period of interest
-    # -        Exclude a sensor if 24 hour average readings exceed 350 ug/m3.
-    # Two sensors at one GPS Location - Note Purple Air IIs (5003s) contain two sensors per package.  EPA addresses this by:
-    # * Removing both 5003s from the model if:
-    # * Raw 24-hour average PM2.5 levels are > 5 ug/m3 AND the two sensors differ by more than 16%.  
-    # * Otherwise just average the two readings and correct as normal.
-    ##########################################
-
+    sensor_data = utils.removeInvalidSensors(sensor_data)
 
     # step 5, apply correction factors to the data!
     for datum in sensor_data:
@@ -476,10 +467,14 @@ def oleks_request ():
     # step 7, Create Model
     model, time_offset = model_utils.createModel(sensor_data, latlon_length_scale, elevation_length_scale, time_length_scale)
 
+    
+
+
     # step 8, get predictions from model
     query_dates = utils.interpolateQueryDates(query_start_datetime, query_end_datetime, query_frequency)
     query_elevation = elevation_interpolator([query_lat], [query_lon])[0]
     predictions = model_utils.predictUsingModel(model, query_lat, query_lon, query_elevation, query_dates, time_offset)
+
 
     return jsonify(predictions)
 
