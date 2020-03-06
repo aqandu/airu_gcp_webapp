@@ -11,24 +11,25 @@ def removeInvalidSensors(sensor_data):
     for datum in sensor_data:
         pm25 = datum['pm25']
         daysSinceEpoch = (datum['date_time'] - epoch).days
+        key = (daysSinceEpoch, datum['device_id'])
         datum['daysSinceEpoch'] = daysSinceEpoch
         if daysSinceEpoch in dayCounts:
-            dayCounts[daysSinceEpoch] += 1
-            dayReadings[daysSinceEpoch] += pm25
+            dayCounts[key] += 1
+            dayReadings[key] += pm25
         else:
-            dayCounts[daysSinceEpoch] = 1
-            dayReadings[daysSinceEpoch] = pm25
+            dayCounts[key] = 1
+            dayReadings[key] = pm25
     
     # get days that had higher than 350 avg reading
-    daysToRemove = [day for day in dayCounts.keys() if (dayReadings[day] / dayCounts[day]) > 350]
-    print(f'Removing these days(+-1) from data due to exceeding 350 ug/m3 avg: {daysToRemove}')
-    daysToRemoveSet = set()
-    for day in daysToRemove:
-        daysToRemoveSet.add(day)
-        daysToRemoveSet.add(day+1)
-        daysToRemoveSet.add(day-1)
+    keysToRemove = [key for key in dayCounts.keys() if (dayReadings[key[0]] / dayCounts[key[0]]) > 350]
+    print(f'Removing these days(+-1) from data due to exceeding 350 ug/m3 avg: {keysToRemove}')
+    keysToRemoveSet = set()
+    for key in keysToRemove:
+        keysToRemoveSet.add(key)
+        keysToRemoveSet.add((key[0]+1, key[1]))
+        keysToRemoveSet.add((key[0]-1, key[1]))
 
-    sensor_data = [datum for datum in sensor_data if datum['daysSinceEpoch'] not in daysToRemoveSet]
+    sensor_data = [datum for datum in sensor_data if (datum['daysSinceEpoch'], datum['sensor_id']) not in keysToRemoveSet]
 
 
     # TODO
