@@ -499,6 +499,7 @@ def oleks_request ():
                     end_date=query_end_datetime + timedelta(hours=time_length_scale))
     unique_sensors = {datum['device_id'] for datum in sensor_data}
     print(f'Loaded {len(sensor_data)} data points for {len(unique_sensors)} unique devices from bgquery.')
+    print(f'Fields: {sensor_data[0].keys()}')
 
     # step 3.5, convert lat/lon to UTM coordinates
     try:
@@ -528,6 +529,7 @@ def oleks_request ():
             datum['type'] = '5003'
 
     # step 4.5, TODO Data Screening
+    print('Screening data')
     sensor_data = utils.removeInvalidSensors(sensor_data)
 
     # step 5, apply correction factors to the data!

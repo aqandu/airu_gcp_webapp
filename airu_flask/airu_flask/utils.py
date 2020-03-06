@@ -3,9 +3,35 @@ import pytz
 import utm
 
 def removeInvalidSensors(sensor_data):
-    # TODO
-    # sensor is invalid its average reading for any day exceeds 350 ug/m3
+    # sensor is invalid if its average reading for any day exceeds 350 ug/m3
+    epoch = datetime(1970,1,1)
+    epoch = pytz.timezone('US/Mountain').localize(epoch)
+    dayCounts = {}
+    dayReadings = {}
+    for datum in sensor_data:
+        pm25 = datum['pm25']
+        daysSinceEpoch = (datum['date_time'] - epoch).days
+        datum['daysSinceEpoch'] = daysSinceEpoch
+        if daysSinceEpoch in dayCounts:
+            dayCounts[daysSinceEpoch] += 1
+            dayReadings[daysSinceEpoch] += pm25
+        else:
+            dayCounts[daysSinceEpoch] = 1
+            dayReadings[daysSinceEpoch] = pm25
+    
+    # get days that had higher than 350 avg reading
+    daysToRemove = [day for day in dayCounts.keys() if (dayReadings[day] / dayCounts[day]) > 350]
+    print(f'Removing these days(+-1) from data due to exceeding 350 ug/m3 avg: {daysToRemove}')
+    daysToRemoveSet = set()
+    for day in daysToRemove:
+        daysToRemoveSet.add(day)
+        daysToRemoveSet.add(day+1)
+        daysToRemoveSet.add(day-1)
 
+    sensor_data = [datum for datum in sensor_data if datum['daysSinceEpoch'] not in daysToRemoveSet]
+
+
+    # TODO
     # 5003 sensors are invalid if Raw 24-hour average PM2.5 levels are > 5 ug/m3 AND the two sensors differ by more than 16%
     # * Otherwise just average the two readings and correct as normal.
     return sensor_data
