@@ -10,10 +10,9 @@ def removeInvalidSensors(sensor_data):
     dayReadings = {}
     for datum in sensor_data:
         pm25 = datum['pm25']
-        daysSinceEpoch = (datum['date_time'] - epoch).days
-        key = (daysSinceEpoch, datum['device_id'])
-        datum['daysSinceEpoch'] = daysSinceEpoch
-        if daysSinceEpoch in dayCounts:
+        datum['daysSinceEpoch'] = (datum['date_time'] - epoch).days
+        key = (datum['daysSinceEpoch'], datum['device_id'])
+        if key in dayCounts:
             dayCounts[key] += 1
             dayReadings[key] += pm25
         else:
@@ -21,19 +20,50 @@ def removeInvalidSensors(sensor_data):
             dayReadings[key] = pm25
     
     # get days that had higher than 350 avg reading
-    keysToRemove = [key for key in dayCounts.keys() if (dayReadings[key[0]] / dayCounts[key[0]]) > 350]
-    print(f'Removing these days(+-1) from data due to exceeding 350 ug/m3 avg: {keysToRemove}')
+    keysToRemove = [key for key in dayCounts if (dayReadings[key] / dayCounts[key]) > 350]
     keysToRemoveSet = set()
     for key in keysToRemove:
         keysToRemoveSet.add(key)
         keysToRemoveSet.add((key[0]+1, key[1]))
         keysToRemoveSet.add((key[0]-1, key[1]))
 
-    sensor_data = [datum for datum in sensor_data if (datum['daysSinceEpoch'], datum['sensor_id']) not in keysToRemoveSet]
+    print(f'Removing these days from data due to exceeding 350 ug/m3 avg: {keysToRemoveSet}')
+    sensor_data = [datum for datum in sensor_data if (datum['daysSinceEpoch'], datum['device_id']) not in keysToRemoveSet]
 
 
-    # TODO
+    # TODO NEEDS TESTING!
     # 5003 sensors are invalid if Raw 24-hour average PM2.5 levels are > 5 ug/m3 AND the two sensors differ by more than 16%
+    sensor5003Locations = {datum['device_id']: (datum['utm_x', datum['utm_y']]) for datum in sensor_data if datum['type'] == '5003'}
+    sensorMatches = {}
+    for sensor in sensor5003Locations:
+        for match in sensor5003Locations:
+            if sensor5003Locations[sensor] == sensor5003Locations[match] and sensor != match:
+                sensorMatches[sensor] = match
+                sensorMatches[match] = sensor
+
+    keysToRemoveSet = set()
+    for key in dayReadings:
+        sensor = key[1]
+        day = key[0]
+        if sensor in sensorMatches:
+            match = sensorMatches[sensor]
+            reading1 = dayReadings[key] / dayCounts[key]
+            key2 = (day, match)
+            if key2 in dayReadings:
+                reading2 = dayReadings[key2] / dayCounts[key2]
+                difference = abs(reading1 - reading2)
+                maximum = max(reading1, reading2)
+                if min(reading1, reading2) > 5 and difference / maximum > 0.16:
+                    keysToRemoveSet.add(key)
+                    keysToRemoveSet.add((key[0]+1, key[1]))
+                    keysToRemoveSet.add((key[0]-1, key[1]))
+                    keysToRemoveSet.add(key2)
+                    keysToRemoveSet.add((key2[0]+1, key2[1]))
+                    keysToRemoveSet.add((key2[0]-1, key2[1]))
+
+    print(f'Removing these days from data due to pair of 5003 sensors with both > 5 daily reading and smaller is 16% different reading from larger : {keysToRemoveSet}')
+    sensor_data = [datum for datum in sensor_data if (datum['daysSinceEpoch'], datum['device_id']) not in keysToRemoveSet]
+
     # * Otherwise just average the two readings and correct as normal.
     return sensor_data
 
