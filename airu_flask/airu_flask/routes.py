@@ -473,8 +473,8 @@ def oleks_request ():
     # length_scales = [document.to_dict() for document in firestore_client.collection('length_scales').stream()]
     # print(f'Loaded {len(length_scales)} length scales from firestore.')
 
-    # print('Loaded length scales:', length_scales, '\n')
-    # length_scales = utils.getScalesInTimeRange(length_scales, query_start_datetime, query_end_datetime)
+    print('Loaded length scales:', length_scales, '\n')
+    length_scales = utils.getScalesInTimeRange(length_scales, query_start_datetime, query_end_datetime)
     # if len(length_scales) != 1:
     #     response = jsonify(f'400 Bad Request: Incorrent number of length scales({len(length_scales)}) found in between {query_start_datetime} and {query_end_datetime}')
     #     response.status_code = 400
