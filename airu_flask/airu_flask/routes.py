@@ -341,6 +341,8 @@ def request_model_data_local(lat, lon, radius, start_date, end_date):
                            "nox": row.NOX,
                            "ver": row.VER})
 
+    unique_sensors = {datum['device_id'] for datum in model_data}
+    print(f'Received {len(model_data)} data points for {len(unique_sensors)} unique devices.')
     return model_data
 
 # ***********************************************************
@@ -387,6 +389,8 @@ def request_model_data_local2(start_date, end_date):
                            "nox": row.NOX,
                            "ver": row.VER})
 
+    unique_sensors = {datum['device_id'] for datum in model_data}
+    print(f'Received {len(model_data)} data points for {len(unique_sensors)} unique devices.')
     return model_data
 
 
@@ -412,6 +416,7 @@ def request_model_data():
 
     # # TODO valudate lat/lon format
     # # TODO validate # num days (set min/max limit)
+
 
     return jsonify(request_model_data_local(lat, lon, radius, start_date, end_date))
 
@@ -459,46 +464,53 @@ def oleks_request ():
 
     print(f'Query parameters: lat={query_lat} lon={query_lon} start_date={query_start_datetime} end_date={query_end_datetime} frequency={query_frequency}')
 
-    # step 1, load up correction factors from the firestore
-    correction_factors = [document.to_dict() for document in firestore_client.collection('correction_factors').stream()]
-    print(f'Loaded {len(correction_factors)} correction factors from firestore.')
-    print(correction_factors, '\n')
+    # # step 1, load up correction factors from the firestore
+    # correction_factors = [document.to_dict() for document in firestore_client.collection('correction_factors').stream()]
+    # print(f'Loaded {len(correction_factors)} correction factors from firestore.')
+    # print(correction_factors, '\n')
 
-    # step 2, load up length scales from the firestore
-    length_scales = [document.to_dict() for document in firestore_client.collection('length_scales').stream()]
-    print(f'Loaded {len(length_scales)} length scales from firestore.')
+    # # step 2, load up length scales from the firestore
+    # length_scales = [document.to_dict() for document in firestore_client.collection('length_scales').stream()]
+    # print(f'Loaded {len(length_scales)} length scales from firestore.')
 
-    print('Loaded length scales:', length_scales, '\n')
-    length_scales = utils.getScalesInTimeRange(length_scales, query_start_datetime, query_end_datetime)
-    if len(length_scales) != 1:
-        response = jsonify(f'400 Bad Request: Incorrent number of length scales({len(length_scales)}) found in between {query_start_datetime} and {query_end_datetime}')
-        response.status_code = 400
-        return response
+    # print('Loaded length scales:', length_scales, '\n')
+    # length_scales = utils.getScalesInTimeRange(length_scales, query_start_datetime, query_end_datetime)
+    # if len(length_scales) != 1:
+    #     response = jsonify(f'400 Bad Request: Incorrent number of length scales({len(length_scales)}) found in between {query_start_datetime} and {query_end_datetime}')
+    #     response.status_code = 400
+    #     return response
     
-    latlon_length_scale = length_scales[0]['latlon']
-    elevation_length_scale = length_scales[0]['elevation']
-    time_length_scale = length_scales[0]['time']
+    # latlon_length_scale = length_scales[0]['latlon']
+    # elevation_length_scale = length_scales[0]['elevation']
+    # time_length_scale = length_scales[0]['time']
 
-    print(f'Using length scales: latlon={latlon_length_scale} elevation={elevation_length_scale} time={time_length_scale}')
+    # print(f'Using length scales: latlon={latlon_length_scale} elevation={elevation_length_scale} time={time_length_scale}')
 
     # step 3, query relevent data
 
     # takes data in length scale radius around the query
-    NUM_METERS_IN_MILE = 1609.34
-    radius = latlon_length_scale/NUM_METERS_IN_MILE # convert meters to miles for db query
-    radius = 5000
+    radius = 50000000
     # Take data before and after the requested times by 1 length scale
+    sensor_data = request_model_data_local(
+                    lat=query_lat, 
+                    lon=query_lon, 
+                    radius=radius, 
+                    start_date=query_start_datetime, 
+                    end_date=query_end_datetime)
+    # NUM_METERS_IN_MILE = 1609.34
+    # radius = latlon_length_scale/NUM_METERS_IN_MILE # convert meters to miles for db query
     # sensor_data = request_model_data_local(
     #                 lat=query_lat, 
     #                 lon=query_lon, 
     #                 radius=radius, 
     #                 start_date=query_start_datetime - timedelta(hours=time_length_scale), 
     #                 end_date=query_end_datetime + timedelta(hours=time_length_scale))
-    sensor_data = request_model_data_local2(
-                    start_date=query_start_datetime - timedelta(hours=time_length_scale), 
-                    end_date=query_end_datetime + timedelta(hours=time_length_scale))
+    # sensor_data = request_model_data_local2(
+    #                 start_date=query_start_datetime - timedelta(hours=time_length_scale), 
+    #                 end_date=query_end_datetime + timedelta(hours=time_length_scale))
     unique_sensors = {datum['device_id'] for datum in sensor_data}
     print(f'Loaded {len(sensor_data)} data points for {len(unique_sensors)} unique devices from bgquery.')
+    return 'asdf'
 
     # step 3.5, convert lat/lon to UTM coordinates
     try:
@@ -512,7 +524,6 @@ def oleks_request ():
 
     unique_sensors = {datum['device_id'] for datum in sensor_data}
     print(f'After removing points with zone num != 12: {len(sensor_data)} data points for {len(unique_sensors)} unique devices.')
-
 
     # Step 4, parse sensor type from the version
     for datum in sensor_data:
@@ -538,6 +549,20 @@ def oleks_request ():
     for datum in sensor_data:
         datum['elevation'] = elevation_interpolator([datum['lat']], [datum['lon']])[0]
 
+        
+    def myconverter(o):
+        if isinstance(o, datetime):
+            return o.strftime('%Y-%m-%d %H:%M:%S%z')
+
+    filename = f"{query_start_datetime.strftime('%Y-%m-%d')}_{query_end_datetime.strftime('%Y-%m-%d')}.txt"
+    with open(filename, 'w') as outfile:
+        json.dump(sensor_data, outfile, default = myconverter)
+
+        
+    devices = {datum['device_id'] for datum in sensor_data}
+    print(devices)
+    return 'Saved Data'
+
     # step 7, Create Model
     model, time_offset = model_utils.createModel(sensor_data, latlon_length_scale, elevation_length_scale, time_length_scale)
 
@@ -546,7 +571,7 @@ def oleks_request ():
     print(f'before training scales: latlon {latlon_length_scale}, elev {elevation_length_scale}, time {time_length_scale}')
     model.train_adam(5,0.1)    #optimize hyperparameter using adam optimizer
     latlon_length_scale, elevation_length_scale, time_length_scale = model.getLengthScales()
-    print(f'before training scales: latlon {latlon_length_scale}, elev {elevation_length_scale}, time {time_length_scale}')
+    print(f'after training scales: latlon {latlon_length_scale}, elev {elevation_length_scale}, time {time_length_scale}')
 
 
     # step 8, get predictions from model
