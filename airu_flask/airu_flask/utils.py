@@ -1,6 +1,19 @@
 from datetime import datetime, timedelta
 import pytz
 import utm
+from matplotlib.path import Path
+
+def isQueryInBoundingBox(bounding_box_vertices, query_lat, query_lon):
+    verts = [(0, 0)] * len(bounding_box_vertices)
+    for elem in bounding_box_vertices:
+        verts[elem['index']] = (elem['lon'], elem['lat'])
+    # Add first vertex to end of verts so that the path closes properly
+    verts.append(verts[0])
+    codes = [Path.MOVETO]
+    codes += [Path.LINETO]*(len(verts)-2)
+    codes += [Path.CLOSEPOLY]
+    boundingBox = Path(verts, codes)
+    return boundingBox.contains_point((query_lon, query_lat))
 
 def removeInvalidSensors(sensor_data):
     # sensor is invalid if its average reading for any day exceeds 350 ug/m3
