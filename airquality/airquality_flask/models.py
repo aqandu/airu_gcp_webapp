@@ -1,4 +1,4 @@
-from airu_flask import login_manager
+from airquality_flask import login_manager
 from flask_login import UserMixin
 
 

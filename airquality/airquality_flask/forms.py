@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, BooleanField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError
-from airu_flask import firestore_client, firestore_auth
+from airquality_flask import firebase_auth, ds_client
 
 
 class RegistrationForm(FlaskForm):
@@ -17,20 +17,36 @@ class RegistrationForm(FlaskForm):
     submit = SubmitField('Submit Registration')
 
     def validate_email(self, email):
-        # Query FIRESTORE to see if email is already in use
-        # If email is already in use - send validation error to select another email
-        doc_ref = firestore_client.collection('users').document(email.data)
-        doc = doc_ref.get()
-        if doc.exists:
+        # Query DATASTORE to ensure email address is not already in use
+        # Query a user with a key (generate the key from kind and unique name)
+        user = ds_client.get(ds_client.key('Users', email.data))
+        if user:
             raise ValidationError('That email is taken. Please choose a different one.')
         else:
-            # Check if credentials already exist
+            # Check if credentials already exist in Authentication
             try:
-                firestore_auth.get_user_by_email(email)
+                firebase_auth.get_user_by_email(email)
                 raise ValidationError('That email is taken. Please choose a different one.')
             except:
                 # We want the exception to be thrown - this indicates no email exists
                 pass
+
+
+        # # LEGACY ##################################################################################
+        # # Query FIRESTORE to see if email is already in use
+        # # If email is already in use - send validation error to select another email
+        # doc_ref = firestore_client.collection('users').document(email.data)
+        # doc = doc_ref.get()
+        # if doc.exists:
+        #     raise ValidationError('That email is taken. Please choose a different one.')
+        # else:
+        #     # Check if credentials already exist in Authentication
+        #     try:
+        #         firestore_auth.get_user_by_email(email)
+        #         raise ValidationError('That email is taken. Please choose a different one.')
+        #     except:
+        #         # We want the exception to be thrown - this indicates no email exists
+        #         pass
 
 
 class LoginForm(FlaskForm):
@@ -40,9 +56,9 @@ class LoginForm(FlaskForm):
     submit = SubmitField('Login')
 
     def validate_email(self, email):
-        # validate that the email exists with FIREBASE
+        # validate that the email exists with FIREBASE authentication
         try:
-            user = firestore_auth.get_user_by_email(email.data)
+            user = firebase_auth.get_user_by_email(email.data)
             if not user.email_verified:
                 raise ValidationError('Email has not been verified.')
         except:
@@ -56,7 +72,7 @@ class ForgotPasswordForm(FlaskForm):
     def validate_email(self, email):
         # validate that the email exists with FIREBASE
         try:
-            user = firestore_auth.get_user_by_email(email.data)
+            user = firebase_auth.get_user_by_email(email.data)
             if not user.email_verified:
                 raise ValidationError('Email has not been verified.')
         except:

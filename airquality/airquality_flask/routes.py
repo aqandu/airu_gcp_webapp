@@ -2,9 +2,9 @@ from dotenv import load_dotenv
 import os
 from flask import render_template, url_for, flash, redirect, request, jsonify
 from flask_mail import Mail, Message
-from airu_flask.forms import RegistrationForm, LoginForm, ForgotPasswordForm
-from airu_flask import app, bq_client, firestore_client, firestore_auth, pyrebase_auth
-from airu_flask.models import User
+from airquality_flask.forms import RegistrationForm, LoginForm, ForgotPasswordForm
+from airquality_flask import app, bq_client, pyrebase_auth, ds_client, datastore, firebase_auth
+from airquality_flask.models import User
 from flask_login import login_user, current_user, logout_user
 import json
 import time
@@ -15,8 +15,6 @@ projectId = os.getenv("PROJECTID")
 datasetId = os.getenv("DATASETID")
 tableId = os.getenv("TABLEID")
 sensor_table = os.getenv("BIGQ_SENSOR")
-# tableRef = bq_client.dataset(datasetId).table(tableId)
-# table = bq_client.get_table(tableRef)
 
 app.config.update(
     DEBUG=True,
@@ -41,28 +39,31 @@ def register():
 
     form = RegistrationForm()
     if form.validate_on_submit():
+        # store the user data in the DATASTORE DB
+        kind = 'Users'                                          # Kind
+        name = form.email.data                                  # Email used for key
+        key_user = ds_client.key(kind, name)
+        user = datastore.Entity(key=key_user)
+        user['first_name'] = form.first_name.data
+        user['last_name'] = form.last_name.data
+        user['street_address'] = form.street_address.data
+        user['city'] = form.city.data
+        user['state'] = form.state.data
+        user['zip_code'] = form.zip_code.data
+        user['email'] = form.email.data
+        user['admin'] = False
+
+        ds_client.put(user)
+
         # Create FIREBASE AUTHENTICATION CREDENTIALS
-        firestore_auth.create_user(
+        firebase_auth.create_user(
             email=form.email.data,
             password=form.password.data)
 
         # generate a link to validate email address - this is an added security measure
         # this link will be sent to the user in the auto generated email
         # if the user fails to validate the email address then we will deny login access
-        email_link = firestore_auth.generate_email_verification_link(form.email.data)
-
-        # store user data in the "users" collection - document name is the user's email address
-        doc_ref = firestore_client.collection('users').document(form.email.data)
-        doc_ref.set({
-            'first_name': form.first_name.data,
-            'last_name': form.last_name.data,
-            'street_address': form.street_address.data,
-            'city_address': form.city.data,
-            'state_address': form.state.data,
-            'zip_code': form.zip_code.data,
-            'email': form.email.data,
-            'admin': False
-        })
+        email_link = firebase_auth.generate_email_verification_link(form.email.data)
 
         flash(f'Registration complete for {form.email.data}!', 'flash_success')
         # Send email to admin and user
@@ -120,6 +121,9 @@ def logout():
     return redirect(url_for('home'))
 
 
+# Called from JS when user clicks on a sensor to see detailed sensor information.
+# Function checks to see if the user is the owner of the sensor
+# Return: true (string) if passed email address owns sensor, false (string) if email not associated with MAC
 @app.route("/validate_user/<d>/", methods=['POST'])
 def validate_user(d):
     return_value = "false"
@@ -128,23 +132,16 @@ def validate_user(d):
     email = json_data["EMAIL"]
     device_id = json_data["DEVICE_ID"]
 
-    # Check to see if email is administrator / owner of sensor
-    doc_ref = firestore_client.collection('users').document(email)
-    doc = doc_ref.get().to_dict()
-    if doc['admin']:
-        return "true"       # remember must return a string not a bool
-
-    # TODO Check FIREBASE for valid email and mac pair (Quang)
-    # Properly format the DEVICE_ID from string MXXXXXXXXXXXX to XX:XX:XX:XX:XX:XX
-    mac = device_id[1:3] + ":" + device_id[3:5] + ":" + device_id[5:7] + ":" + device_id[7:9] + ":" + device_id[9:11] + ":" + device_id[11:13]
-    doc_ref = firestore_client.collection('sensor_owner').document(mac)
-    doc = doc_ref.get().to_dict()
-    try:
-        if doc['email'] == email:
-            return "true"
-        else:
-            return "false"
-    except:
+    # Check to see if email is administrator OR owner of sensor
+    user = ds_client.get(ds_client.key('Users', email))
+    # check if admin property is true
+    if user['admin']:
+        return "true"
+    elif len(user['sensors']):
+        for i in range(len(user['sensors'])):
+            if user['sensors'][i] == device_id:
+                return "true"
+    else:
         return "false"
 
 
@@ -155,7 +152,7 @@ def my_converter(o):
 # Helper Functions ***************************************************************
 def send_registration_email(form, email_link):
     try:
-        msg = Message('airU Registration', sender=os.getenv("MAIL_USERNAME"), recipients=[form.email.data, os.getenv("MAIL_USERNAME")])
+        msg = Message('Air Quality Registration', sender=os.getenv("MAIL_USERNAME"), recipients=[form.email.data, os.getenv("MAIL_USERNAME")])
         msg.body = 'Test'
         msg.html = render_template("registration_email.html",
                                email=form.email.data,
@@ -173,7 +170,7 @@ def send_registration_email(form, email_link):
         return str(e)
 
 # ***********************************************************
-# Function: request_data_flask(d)
+# Function: request_data_flask(d) - used to populate the map with sensors
 # Called by script.js
 # Parameter:
 # Return: Last recorded sensor input from all sensors in the DB
